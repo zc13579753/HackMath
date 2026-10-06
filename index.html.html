@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>HackMatch - 黑客松组队助手</title>
+    <!-- 不再依赖任何外部库，纯原生运行 -->
+    <style>
+        :root {
+            --bg-dark: #0B1120;
+            --phone-bg: #111827;
+            --primary-gradient: linear-gradient(135deg, #6366F1 0%, #A855F7 50%, #EC4899 100%);
+            --text-main: #F8FAFC;
+            --text-sub: #94A3B8;
+            --input-bg: #1E293B;
+            --input-border: #334155;
+            --input-focus: #6366F1;
+            --danger: #EF4444;
+            --success: #10B981;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, sans-serif; }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+            background-image: radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
+                              radial-gradient(circle at 90% 80%, rgba(236, 72, 153, 0.1) 0%, transparent 40%);
+        }
+
+        #app-container, body > .view { width: 100%; max-width: 480px; margin: 0 auto; position: relative; }
+        .view { display: none; padding: 24px; min-height: 100vh; flex-direction: column; }
+        .view.active { display: flex; }
+
+        /* 登录页 */
+        .login-container { display: flex; flex-direction: column; justify-content: center; flex: 1; }
+        .gradient-text { font-size: 32px; font-weight: 700; background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px; }
+        .sub-text { color: var(--text-sub); font-size: 15px; margin-bottom: 40px; }
+
+        /* 表单 */
+        .form-group { margin-bottom: 20px; position: relative; }
+        .form-group label { display: block; font-size: 13px; color: var(--text-sub); margin-bottom: 8px; transition: color 0.3s; }
+        .form-input { width: 100%; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 14px; padding: 16px; font-size: 15px; color: var(--text-main); outline: none; transition: all 0.3s; }
+        .form-input::placeholder { color: #475569; }
+        .form-group.focused label { color: var(--input-focus); }
+        .form-group.focused .form-input { border-color: var(--input-focus); box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15); background-color: #1a2332; }
+
+        /* 按钮 */
+        .action-btn { width: 100%; padding: 16px; border: none; border-radius: 14px; background: var(--primary-gradient); color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s; margin-top: 10px; }
+        .action-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 20px -10px rgba(168, 85, 247, 0.5); }
+        .action-btn:active { transform: translateY(0); }
+        .action-btn:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+
+        .footer-links { text-align: center; margin-top: 20px; font-size: 14px; color: var(--text-sub); }
+        .footer-links a { color: var(--input-focus); text-decoration: none; font-weight: 500; cursor: pointer; margin-left: 4px; }
+
+        /* 主应用 */
+        .app-header { margin-bottom: 24px; }
+        .app-header h2 { font-size: 24px; }
+        .app-header p { color: var(--text-sub); font-size: 14px; margin-top: 4px; }
+
+        .tabs { display: flex; background: var(--input-bg); border-radius: 14px; padding: 4px; margin-bottom: 24px; }
+        .tab-btn { flex: 1; padding: 10px; border: none; background: transparent; color: var(--text-sub); font-size: 14px; font-weight: 600; border-radius: 10px; cursor: pointer; transition: all 0.3s; }
+        .tab-btn.active { background: var(--phone-bg); color: var(--text-main); box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+        .tab-content { display: none; animation: fadeIn 0.3s ease; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .tags-container { display: flex; flex-wrap: wrap; gap: 8px; }
+        .tag { padding: 8px 16px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 20px; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+        .tag.selected { background: rgba(99, 102, 241, 0.2); border-color: var(--input-focus); color: #818CF8; }
+
+        /* 名片预览 */
+        .card-preview { background: var(--phone-bg); border-radius: 24px; padding: 24px; margin-top: 24px; position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,0.05); box-shadow: 0 20px 40px -20px rgba(0,0,0,0.5); }
+        .card-glow { position: absolute; width: 200px; height: 200px; background: radial-gradient(circle, rgba(168, 85, 247, 0.25) 0%, transparent 70%); top: -60px; right: -60px; border-radius: 50%; }
+        .card-content { position: relative; z-index: 1; }
+        .card-header { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+        .avatar { width: 50px; height: 50px; border-radius: 50%; background: var(--primary-gradient); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; }
+        .card-info h3 { font-size: 18px; margin-bottom: 4px; }
+        .card-info p { font-size: 13px; color: var(--text-sub); }
+        .card-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
+        .card-tags .preview-tag { padding: 4px 10px; background: rgba(168, 85, 247, 0.15); color: #C084FC; border-radius: 6px; font-size: 12px; }
+        .card-footer { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-sub); border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px; }
+
+        .hint-text { text-align: center; font-size: 12px; color: var(--text-sub); margin-top: 12px; }
+
+        /* 匹配墙 */
+        .match-wall { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+        .match-card { background: var(--input-bg); border-radius: 16px; padding: 16px; border: 1px solid var(--input-border); text-align: center; cursor: pointer; transition: all 0.3s ease; }
+        .match-card:hover { transform: translateY(-3px); border-color: #6366F1; }
+        .match-card.selected { border-color: #A855F7; box-shadow: 0 0 15px rgba(168, 85, 247, 0.4); transform: scale(1.02); }
+        .match-card.selected h4 { color: #C084FC; }
+        .match-card h4 { font-size: 15px; margin-bottom: 6px; }
+        .match-card p { font-size: 12px; color: var(--text-sub); margin-bottom: 8px; }
+        .match-btn { background: linear-gradient(135deg, #EC4899 0%, #8B5CF6 100%); }
+
+        /* 弹窗 */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(11, 17, 32, 0.95); z-index: 100; align-items: center; justify-content: center; }
+        .modal.active { display: flex; }
+        .modal-content { background: var(--phone-bg); border: 1px solid var(--input-border); border-radius: 24px; padding: 24px; width: 90%; max-width: 360px; animation: popIn 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55); }
+        @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .close-modal { font-size: 24px; cursor: pointer; color: var(--text-sub); }
+        .icebreaker-box { background: var(--input-bg); border-radius: 12px; padding: 16px; margin-top: 16px; }
+        .icebreaker-box h4 { font-size: 14px; margin-bottom: 8px; color: #A855F7; }
+        .icebreaker-box ul { padding-left: 20px; font-size: 13px; color: var(--text-sub); line-height: 1.8; }
+
+        .toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.9); background: var(--success); color: white; padding: 12px 24px; border-radius: 12px; font-size: 14px; opacity: 0; visibility: hidden; transition: all 0.3s; z-index: 200; }
+        .toast.show { opacity: 1; visibility: visible; transform: translate(-50%, -50%) scale(1); }
+    </style>
+</head>
+<body>
+
+    <div id="toast" class="toast">提示信息</div>
+
+    <!-- 登录页 -->
+    <div id="view-login" class="view active">
+        <div class="login-container">
+            <h1 class="gradient-text">Welcome Back</h1>
+            <p class="sub-text">登录 HackMatch，寻找你的神队友</p>
+            <div class="form-group"><label>账号 / 昵称</label><input type="text" id="login-account" class="form-input" placeholder="请输入账号或昵称"></div>
+            <div class="form-group"><label>密码</label><input type="password" id="login-password" class="form-input" placeholder="请输入密码"></div>
+            <button id="btn-login" class="action-btn">登 录</button>
+            <div class="footer-links"><span>没有账号？</span><a id="go-register">立即注册</a></div>
+        </div>
+    </div>
+
+    <!-- 主应用页 -->
+    <div id="view-app" class="view">
+        <div class="app-header">
+            <h2>你好，<span id="user-name-display">选手</span> 👋</h2>
+            <p>创建你的组队名片，或去大厅匹配队友</p>
+        </div>
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="card">名片生成器</button>
+            <button class="tab-btn" data-tab="match">破冰匹配墙</button>
+        </div>
+
+        <!-- 名片生成器 -->
+        <div id="tab-card" class="tab-content active">
+            <div class="form-group"><label>你的昵称</label><input type="text" id="card-name" class="form-input" placeholder="例如：张三" maxlength="10"></div>
+            <div class="form-group">
+                <label>技能标签 (点击选择)</label>
+                <div class="tags-container" id="skill-tags">
+                    <span class="tag" data-value="前端">前端</span>
+                    <span class="tag" data-value="后端">后端</span>
+                    <span class="tag" data-value="UI设计">UI设计</span>
+                    <span class="tag" data-value="产品">产品</span>
+                    <span class="tag" data-value="AI算法">AI算法</span>
+                    <span class="tag" data-value="全栈">全栈</span>
+                </div>
+            </div>
+            <div class="form-group"><label>一句话介绍</label><input type="text" id="card-slogan" class="form-input" placeholder="例如：精通Vue，求带飞" maxlength="20"></div>
+            <div class="form-group"><label>联系方式 (微信号)</label><input type="text" id="card-contact" class="form-input" placeholder="例如：hacker_123"></div>
+
+            <button id="btn-generate" class="action-btn">生成我的名片</button>
+
+            <div id="card-preview" class="card-preview">
+                <div class="card-glow"></div>
+                <div class="card-content">
+                    <div class="card-header">
+                        <div class="avatar">#</div>
+                        <div class="card-info">
+                            <h3 id="preview-name">你的昵称</h3>
+                            <p id="preview-slogan">一句话介绍</p>
+                        </div>
+                    </div>
+                    <div class="card-tags" id="preview-tags"></div>
+                    <div class="card-footer">
+                        <span>微信: <span id="preview-contact">未填写</span></span>
+                        <span>HackMatch</span>
+                    </div>
+                </div>
+            </div>
+            <p class="hint-text">💡 长按上方名片或截图保存，分享给队友</p>
+        </div>
+
+        <!-- 匹配墙 -->
+        <div id="tab-match" class="tab-content">
+            <div class="match-wall" id="match-wall"></div>
+            <button id="btn-match" class="action-btn match-btn">🎲 随机匹配一位队友</button>
+        </div>
+    </div>
+
+    <!-- 匹配结果弹窗 -->
+    <div id="match-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><h3>匹配成功！</h3><span class="close-modal" id="close-modal">&times;</span></div>
+            <div class="modal-body">
+                <p>你匹配到了 <strong id="match-name" class="gradient-text">队友</strong></p>
+                <div class="icebreaker-box">
+                    <h4>破冰问题 (请互相提问):</h4>
+                    <ul id="icebreaker-list"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 名片图片展示弹窗 -->
+    <div id="img-preview-modal" class="modal">
+        <div class="modal-content" style="text-align: center;">
+            <h3 style="margin-bottom: 12px; color: #fff;">名片已生成</h3>
+            <p style="font-size: 13px; color: #94A3B8; margin-bottom: 16px;">请长按图片或右键保存</p>
+            <img id="generated-card-img" style="width: 100%; border-radius: 12px; margin-bottom: 20px;" src="" alt="名片">
+            <button class="action-btn" id="close-img-modal" style="margin-top: 0;">完 成</button>
+        </div>
+    </div>
+
+    <script>
+        const state = { user: null, selectedSkills: [], selectedPlayer: null };
+
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.style.background = isError ? 'var(--danger)' : 'var(--success)';
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2500);
+        }
+
+        function switchView(viewId) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById(viewId).classList.add('active');
+        }
+
+        // 登录
+        document.getElementById('go-register').addEventListener('click', () => showToast('演示版本，直接输入账号密码登录即可', false));
+        document.getElementById('btn-login').addEventListener('click', () => {
+            const account = document.getElementById('login-account').value.trim();
+            const password = document.getElementById('login-password').value.trim();
+            if (!account) return showToast('请输入账号或昵称', true);
+            if (!password) return showToast('请输入密码', true);
+            state.user = account;
+            document.getElementById('user-name-display').textContent = account;
+            showToast('登录成功，正在进入...', false);
+            setTimeout(() => switchView('view-app'), 800);
+        });
+
+        // 标签页切换
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+            });
+        });
+
+        // 名片生成器逻辑
+        const skillTags = document.getElementById('skill-tags');
+        const previewTags = document.getElementById('preview-tags');
+        const cardNameInput = document.getElementById('card-name');
+        const cardSloganInput = document.getElementById('card-slogan');
+        const cardContactInput = document.getElementById('card-contact');
+
+        skillTags.addEventListener('click', (e) => {
+            if (e.target.classList.contains('tag')) {
+                const tag = e.target;
+                const value = tag.dataset.value;
+                if (state.selectedSkills.includes(value)) {
+                    state.selectedSkills = state.selectedSkills.filter(s => s !== value);
+                    tag.classList.remove('selected');
+                } else {
+                    if (state.selectedSkills.length >= 3) return showToast('最多选择3个技能标签', true);
+                    state.selectedSkills.push(value);
+                    tag.classList.add('selected');
+                }
+                previewTags.innerHTML = state.selectedSkills.map(s => `<span class="preview-tag">${s}</span>`).join('');
+            }
+        });
+
+        function bindPreview(inputEl, previewEl, defaultText = '未填写') {
+            inputEl.addEventListener('input', () => previewEl.textContent = inputEl.value.trim() || defaultText);
+        }
+        bindPreview(cardNameInput, document.getElementById('preview-name'), '你的昵称');
+        bindPreview(cardSloganInput, document.getElementById('preview-slogan'), '一句话介绍');
+        bindPreview(cardContactInput, document.getElementById('preview-contact'), '未填写');
+
+        // 生成名片（纯原生 Canvas 绘图，无需任何外部库）
+        document.getElementById('btn-generate').addEventListener('click', () => {
+            const name = cardNameInput.value.trim();
+            if (!name) return showToast('请至少填写你的昵称', true);
+
+            const btn = document.getElementById('btn-generate');
+            btn.textContent = '生成中...';
+            btn.disabled = true;
+
+            // 创建一个隐藏的 Canvas
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const width = 600;
+            const height = 800;
+            canvas.width = width;
+            canvas.height = height;
+
+            // 1. 画背景
+            ctx.fillStyle = '#111827';
+            ctx.fillRect(0, 0, width, height);
+
+            // 2. 画右上角发光
+            const gradient = ctx.createRadialGradient(width, 0, 0, width, 0, 300);
+            gradient.addColorStop(0, 'rgba(168, 85, 247, 0.3)');
+            gradient.addColorStop(1, 'rgba(168, 85, 247, 0)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, width, height);
+
+            // 3. 画头像
+            const avatarGradient = ctx.createLinearGradient(80, 80, 160, 160);
+            avatarGradient.addColorStop(0, '#6366F1');
+            avatarGradient.addColorStop(0.5, '#A855F7');
+            avatarGradient.addColorStop(1, '#EC4899');
+            ctx.fillStyle = avatarGradient;
+            ctx.beginPath();
+            ctx.arc(100, 100, 40, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 4. 画 '#' 号
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 40px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('#', 100, 105);
+
+            // 5. 画名字
+            ctx.fillStyle = '#F8FAFC';
+            ctx.font = 'bold 36px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'alphabetic';
+            ctx.fillText(name, 160, 95);
+
+            // 6. 画标语
+            ctx.fillStyle = '#94A3B8';
+            ctx.font = '20px sans-serif';
+            ctx.fillText(cardSloganInput.value.trim() || '一句话介绍', 160, 135);
+
+            // 7. 画技能标签
+            let tagX = 60;
+            const tagY = 180;
+            state.selectedSkills.forEach(skill => {
+                ctx.fillStyle = 'rgba(168, 85, 247, 0.2)';
+                ctx.beginPath();
+                if (ctx.roundRect) {
+                    ctx.roundRect(tagX, tagY, 80, 36, 10);
+                } else {
+                    ctx.rect(tagX, tagY, 80, 36); // fallback
+                }
+                ctx.fill();
+
+                ctx.fillStyle = '#C084FC';
+                ctx.font = '16px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(skill, tagX + 40, tagY + 18);
+                tagX += 100;
+            });
+
+            // 8. 画底部联系方式
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.beginPath();
+            ctx.moveTo(60, 700);
+            ctx.lineTo(width - 60, 700);
+            ctx.stroke();
+
+            ctx.fillStyle = '#94A3B8';
+            ctx.font = '18px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'alphabetic';
+            ctx.fillText(`微信: ${cardContactInput.value.trim() || '未填写'}`, 60, 740);
+            ctx.textAlign = 'right';
+            ctx.fillText('HackMatch', width - 60, 740);
+
+            // 9. 转换为图片并展示
+            const imgData = canvas.toDataURL('image/png');
+            document.getElementById('generated-card-img').src = imgData;
+            document.getElementById('img-preview-modal').classList.add('active');
+
+            btn.textContent = '生成我的名片';
+            btn.disabled = false;
+        });
+
+        // 关闭图片预览弹窗
+        document.getElementById('close-img-modal').addEventListener('click', () => {
+            document.getElementById('img-preview-modal').classList.remove('active');
+        });
+
+        // 破冰匹配墙（含卡片点击交互）
+        const mockPlayers = [
+            { name: '前端大师兄', skill: '前端', slogan: '精通Vue3，求后端大腿' },
+            { name: 'UI小仙女', skill: 'UI设计', slogan: '擅长暗黑科技风，找全栈' },
+            { name: 'AI炼丹师', skill: 'AI算法', slogan: '正在跑大模型，缺前端展示' },
+            { name: '产品经理', skill: '产品', slogan: '懂技术，会画原型，求带' }
+        ];
+        
+        const matchWall = document.getElementById('match-wall');
+        const matchBtn = document.getElementById('btn-match');
+
+        mockPlayers.forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'match-card';
+            card.innerHTML = `<h4>${p.name}</h4><p>${p.skill}</p><p style="font-size:11px;margin-bottom:0;">${p.slogan}</p>`;
+            
+            // 卡片点击交互
+            card.addEventListener('click', () => {
+                document.querySelectorAll('.match-card').forEach(c => c.classList.remove('selected'));
+                card.classList.add('selected');
+                state.selectedPlayer = p.name; // 记住选中的人
+                matchBtn.textContent = `🎯 邀请 ${p.name} 组队`;
+            });
+            
+            matchWall.appendChild(card);
+        });
+
+        // 点击匹配按钮逻辑（兼容随机匹配和指定邀请）
+        matchBtn.addEventListener('click', () => {
+            let targetPlayer;
+            
+            if (state.selectedPlayer) {
+                // 如果用户在卡片上点选了
+                targetPlayer = mockPlayers.find(p => p.name === state.selectedPlayer);
+            } else {
+                // 如果用户没点卡片，直接点按钮，就随机选一个
+                targetPlayer = mockPlayers[Math.floor(Math.random() * mockPlayers.length)];
+            }
+            
+            document.getElementById('match-name').textContent = targetPlayer.name;
+            
+            const questions = ["你最近在折腾什么技术？", "你做过最疯狂的项目是什么？", "这次黑客松你想拿什么奖？", "你的代码风格是怎样的？"];
+            const selected = questions.sort(() => 0.5 - Math.random()).slice(0, 3);
+            document.getElementById('icebreaker-list').innerHTML = selected.map(q => `<li>${q}</li>`).join('');
+            
+            document.getElementById('match-modal').classList.add('active');
+            
+            // 重置选中状态
+            state.selectedPlayer = null;
+            matchBtn.textContent = '🎲 随机匹配一位队友';
+            document.querySelectorAll('.match-card').forEach(c => c.classList.remove('selected'));
+        });
+
+        // 关闭匹配弹窗
+        document.getElementById('close-modal').addEventListener('click', () => {
+            document.getElementById('match-modal').classList.remove('active');
+        });
+    </script>
+</body>
+</html>
